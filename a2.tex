@@ -1,0 +1,106 @@
+\documentclass[a4paper,12pt]{article}
+
+\usepackage{a4wide}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{lipsum}
+\usepackage{float}
+
+\usepackage{graphicx}  % For including images
+
+\usepackage{xcolor}  % For a colorfull presentation
+\usepackage{listings}  % For presenting code
+
+\usepackage{hyperref}
+
+% Definition of a style for code, matter of taste
+\lstdefinestyle{custom}{
+  language=C,
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color[HTML]{F7F7F7},
+  rulecolor=\color[HTML]{EEEEEE},
+  identifierstyle=\color[HTML]{24292E},
+  emphstyle=\color[HTML]{005CC5},
+  keywordstyle=\color[HTML]{D73A49},
+  commentstyle=\color[HTML]{6A737D},
+  stringstyle=\color[HTML]{032F62},
+  emph={@property,self,range,True,False},
+  morekeywords={super,with,as,lambda},
+  literate=%
+    {+}{{{\color[HTML]{D73A49}+}}}1
+    {-}{{{\color[HTML]{D73A49}-}}}1
+    {*}{{{\color[HTML]{D73A49}*}}}1
+    {/}{{{\color[HTML]{D73A49}/}}}1
+    {=}{{{\color[HTML]{D73A49}=}}}1
+    {/=}{{{\color[HTML]{D73A49}=}}}1,
+  breakatwhitespace=false,
+  breaklines=true,
+  captionpos=b,
+  keepspaces=true,
+  numbers=none,
+  showspaces=false,
+  showstringspaces=false,
+  showtabs=false,
+  tabsize=4,
+  frame=single,
+}
+\lstset{style=custom}
+
+\begin{document}
+\title{HPPS 2025 - Assignment 2}
+\author{Omar Amer Hachach - swf732}
+\date{\today}
+\maketitle
+
+% Please leave the table of contents as is, for the ease of navigation for TAs
+\tableofcontents % Generates the table of contents
+\newpage % Start a new page after the table of contents
+
+\section{Introduction}
+This assignment involved implementing a library for reading and writing numbers in different data formats (ASCII, binary little-endian, binary big-endian). I think the implementation is solid, all functions work correctly and handle the required formats and error cases.
+\\\\
+To build and test, just run \texttt{make all}. The test programs are named like \texttt{format1\_to\_format2}, and you can pipe them together to test conversions.
+
+\section{Task 1: read\_uint\_be() and write\_uint\_be()}
+These functions are functional and work correctly. Big-endian format stores the most significant byte first, so for example \texttt{0x12345678} gets stored as bytes \texttt{[0x12, 0x34, 0x56, 0x78]}. The implementation basically mirrors the little-endian version but with reversed byte ordering when assembling/extracting the integer.
+\\\\
+For testing I tried round-trip conversions (ASCII to big-endian to ASCII) and they work fine. Also tested with different values including edge cases.
+
+\section{Task 2: read\_double\_bin() and write\_double\_bin()}
+These are functional. They use \texttt{fread()} and \texttt{fwrite()} directly to read/write 8 bytes for a double. The interesting part here is the EOF vs error handling - \texttt{feof()} is used to distinguish between reaching end of file versus an actual I/O error.
+\\\\
+Testing was mainly round-trip conversions (ASCII double to binary to ASCII) which preserved values correctly.
+
+\section{Task 3: write\_double\_ascii()}
+This one's straightforward, just uses \texttt{fprintf()} with \texttt{\%f}. The potential shortcoming is that \texttt{\%f} only prints 6 decimal places by default, so you lose precision for doubles that need more accuracy. But it works fine for the assignment's purposes.
+
+\section{Task 4: read\_double\_ascii()}
+This is the most complex function since it has to parse the format \texttt{-?[0-9]+\textbackslash.[0-9]+} manually. It handles optional minus sign, integer part, decimal point, and fractional part. The tricky part is preserving leading zeros in the fractional part (like \texttt{0.001}) - this is done by counting the number of fractional digits read and then dividing by $10^n$ where $n$ is that count.
+\\\\
+I tested with negative numbers, leading zeros, different magnitudes. All worked as expected.
+
+\section{Task 5: avg\_doubles Program}
+The program is functional. It reads binary doubles from stdin, accumulates sum and count, then outputs the average in ASCII format. One edge case to handle is empty input - the code checks if \texttt{count > 0} before dividing, otherwise it returns 0.0 to avoid division by zero.
+\\\\
+Tested with the example from the spec (six values averaging to 3.95), single values, and empty input. All cases worked correctly.
+
+\section{Questions}
+\subsection{How much larger are data files in the ASCII integer format, compared to the binary integer format?}
+Binary format uses exactly 4 bytes per \texttt{uint32\_t}. ASCII format is variable - depends on how many digits the number has, plus a whitespace separator.
+\\\\
+For 1000 integers: binary is always 4000 bytes. ASCII could be around 2000 bytes for single-digit numbers (like "5 "), or up to 11000 bytes for maximum \texttt{uint32\_t} values (10 digits + space each). So ASCII can be anywhere from 50\% smaller to 175\% larger than binary depending on the data.
+
+\subsection{How much larger are data files in the ASCII floating-point format, compared to the binary floating-point format?}
+Binary doubles are 8 bytes each. ASCII doubles with \texttt{\%f} format are typically 8-14 characters (depending on value and the 6 decimal places).
+\\\\
+For 1000 doubles: binary is 8000 bytes. ASCII is roughly 9000-14000 bytes (12-75\% larger). So ASCII is still larger, but the overhead is less dramatic than with integers since the decimal format has fixed precision.
+
+\subsection{Would it be possible to add a function read\_uint() that accepts both the binary and ASCII integer format; deciding the interpretation based on the actual input? Explain why or why not.}
+No, this isn't generally possible because byte sequences are ambiguous. For example, the bytes \texttt{[0x30, 0x30, 0x30, 0x31]} could be interpreted as ASCII "0001" (value 1), or as binary little-endian (20037680), or as binary big-endian (808464433). There's no reliable way to tell which interpretation is correct without additional context like file headers or user specification.
+
+\subsection{Are there any floating-point values that can be expressed in the binary format, but not the ASCII format?}
+Yes. The main issue is precision - binary doubles can store much more precision than the 6 decimal places that \texttt{\%f} prints by default. So values with lots of significant digits would lose information when converted to ASCII. Also, really large or small numbers (like $10^{100}$ or $10^{-100}$) would need impractically long fixed-point representations in our ASCII format, even though binary handles them fine.
+
+
+\end{document}
